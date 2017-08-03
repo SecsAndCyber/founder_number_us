@@ -1,4 +1,4 @@
-import sys, argparse
+import sys, argparse, re
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.pdfpage import PDFPage
 from pdfminer.converter import XMLConverter, HTMLConverter, TextConverter
@@ -22,13 +22,40 @@ def pdfparser_page(data):
         retstr.reset()
         retstr.truncate()
 
+def strip_re(input, re_obj):
+    output=""
+    
+    if type(re_obj) == type(""):
+        re_obj = re.compile(re_obj)
+    
+    hcre = re_obj.search(input)
+    while hcre:                
+        output += input[:hcre.start()] + "".join(hcre.groups())
+        input = input[hcre.end():]
+        hcre = re_obj.search(input)
+    output += input
+    return output
+
+def runtest():
+    assert "aaaa" == strip_re("abbababbba", "b"), strip_re("abbababbba", "b")
+    assert "aaaa" == strip_re("abbaabbba", "b"), strip_re("abbaabbba", "b")
+    
+    assert "biographical  data" == strip_re("""biographi-
+cal  data""", "(\w+)-\s+(\w)"), strip_re("""biographi-
+cal  data""", "(\w+)-\s+(\w)")
+    exit()
+        
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
     parser.add_argument("pdffile")
     parser.add_argument("--txtfile")
     parser.add_argument("--pages", type=int, default=0xffffffff)
+    parser.add_argument("--test", action="store_true")
     args = parser.parse_args()
+    
+    if args.test:
+        runtest()
     
     if args.txtfile:
         stream = open(args.txtfile, 'w')
@@ -39,6 +66,10 @@ if __name__ == '__main__':
     for data in pdfparser_page(args.pdffile):
         if x < args.pages:
             stream.write("**[PAGE {:04d}]**\n".format(x))
+            
+            for remove in ( "(\w+)-\s+(\w)", "( ) +", "\s(\s)"):
+                data = strip_re(data, remove)
+            
             stream.write(data)
             stream.write("-"*125 + "\n")
             stream.flush()
