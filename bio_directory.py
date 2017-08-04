@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 import sys, argparse, re
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.pdfpage import PDFPage
@@ -22,21 +23,25 @@ def pdfparser_page(data):
         retstr.reset()
         retstr.truncate()
 
-def strip_re(input, re_obj):
+def strip_re(input, re_obj, sub=None):
     output=""
     
     if type(re_obj) == type(""):
         re_obj = re.compile(re_obj)
     
     hcre = re_obj.search(input)
-    while hcre:                
-        output += input[:hcre.start()] + "".join(hcre.groups())
+    while hcre:
+        if sub:
+            output += input[:hcre.start()] + sub
+        else:
+            output += input[:hcre.start()] + "".join(hcre.groups())
         input = input[hcre.end():]
         hcre = re_obj.search(input)
     output += input
     return output
 
 def runtest():
+    assert "accacaccca" == strip_re("abbababbba", "b", "c"), strip_re("abbababbba", "b", "c")
     assert "aaaa" == strip_re("abbababbba", "b"), strip_re("abbababbba", "b")
     assert "aaaa" == strip_re("abbaabbba", "b"), strip_re("abbaabbba", "b")
     
@@ -45,6 +50,8 @@ cal  data""", "(\w+)-\s+(\w)"), strip_re("""biographi-
 cal  data""", "(\w+)-\s+(\w)")
     exit()
         
+ADMINISTRATION_DATE_RANGE = re.compile(r"((JANUARY|MARCH|APRIL|MAY) \d+, \d{4},\s+TO\s+(JANUARY|MARCH|APRIL|MAY) \d+, \d{4})")
+PRESIDENTIAL_ADMINISTRATION = re.compile(r"^(First|Second|Third|Fourth)??\s*Administration of (\w+\s+(\w+\.?\s+)??\w+(, JR\.)??)$",re.M)
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
@@ -67,8 +74,20 @@ if __name__ == '__main__':
         if x < args.pages:
             stream.write("**[PAGE {:04d}]**\n".format(x))
             
-            for remove in ( "(\w+)-\s+(\w)", "( ) +", "\s(\s)"):
-                data = strip_re(data, remove)
+            # This is pure data cleanup
+            for remove, replace in ( ["(\w+)-\s+(\w)", None],
+                            ["( ) +", None],
+                            ["\s(\s)", None],
+                            ):
+                data = strip_re(data, remove, replace)
+            
+            if ADMINISTRATION_DATE_RANGE.search(data):
+                print ADMINISTRATION_DATE_RANGE.search(data).group(0)
+            if PRESIDENTIAL_ADMINISTRATION.search(data):
+                print PRESIDENTIAL_ADMINISTRATION.search(data).group(0)
+                print PRESIDENTIAL_ADMINISTRATION.search(data).group(2)
+            
+            
             
             stream.write(data)
             stream.write("-"*125 + "\n")
