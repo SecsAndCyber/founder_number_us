@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-import sys, argparse, re
+import sys, argparse, re, json
 from pdfminer.pdfinterp import PDFResourceManager, PDFPageInterpreter
 from pdfminer.pdfpage import PDFPage
 from pdfminer.converter import XMLConverter, HTMLConverter, TextConverter
@@ -50,13 +50,51 @@ cal  data""", "(\w+)-\s+(\w)"), strip_re("""biographi-
 cal  data""", "(\w+)-\s+(\w)")
     exit()
         
-ADMINISTRATION_DATE_RANGE = re.compile(r"((JANUARY|MARCH|APRIL|MAY) \d+, \d{4},\s+TO\s+(JANUARY|MARCH|APRIL|MAY) \d+, \d{4})")
-PRESIDENTIAL_ADMINISTRATION = re.compile(r"^(First|Second|Third|Fourth)??\s*Administration of (\w+\s+(\w+\.?\s+)??\w+(, JR\.)??)$",re.M)
+ADMINISTRATION_DATE_RANGE = re.compile(r"((JANUARY|MARCH|APRIL|MAY|JULY|AUGUST|SEPTEMBER|NOVEMBER) \d+, \d{4},\s+TO\s+(JANUARY|MARCH|APRIL|MAY|JULY|AUGUST|SEPTEMBER|NOVEMBER) \d+, \d{4})")
+PRESIDENTIAL_ADMINISTRATION = re.compile(r"^(First|Second|Third|Fourth)??\s*Administration of (\w+\s+(\w+\.?\s+)??(\w+\.?\s+)??\w+(, JR\.)??)$",re.M)
+
+Presidential_Administrations = []
+
+def Process_Presidential_Administration(data):
+    extracted = False
+    if PRESIDENTIAL_ADMINISTRATION.search(data):
+        administration_dict = {}
+        extracted = True
+        administration_desc = PRESIDENTIAL_ADMINISTRATION.search(data).group(0)
+        president = PRESIDENTIAL_ADMINISTRATION.search(data).group(2)
+        
+        data = data[PRESIDENTIAL_ADMINISTRATION.search(data).end():]
+        administration_dict["type"]         = "presidential_administration"
+        administration_dict["description"]  = administration_desc.strip()
+        administration_dict["president"]    = president.strip()
+
+        if ADMINISTRATION_DATE_RANGE.search(data):
+            date_range = ADMINISTRATION_DATE_RANGE.search(data).group(0)
+            data = data[ADMINISTRATION_DATE_RANGE.search(data).end():]
+            print date_range
+            administration_dict["dates"]    = date_range
+            jsonstream.flush()
+        
+        if PRESIDENTIAL_ADMINISTRATION.search(data):
+            administration_body = data[:PRESIDENTIAL_ADMINISTRATION.search(data).start()]
+        else:
+            administration_body = data
+        if administration_body:
+            administration_dict["body"]     = administration_body.strip()
+        jsonstream.write(json.dumps(administration_dict))
+        jsonstream.write('\n')
+        jsonstream.flush()
+        
+        Presidential_Administrations.append( administration_dict )
+        
+    return data, extracted
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     
     parser.add_argument("pdffile")
     parser.add_argument("--txtfile")
+    parser.add_argument("--jsonfile")
     parser.add_argument("--pages", type=int, default=0xffffffff)
     parser.add_argument("--test", action="store_true")
     args = parser.parse_args()
@@ -68,9 +106,15 @@ if __name__ == '__main__':
         stream = open(args.txtfile, 'w')
     else:
         stream = sys.stdout
+        
+    if args.jsonfile:
+        jsonstream = open(args.jsonfile, 'w')
+    else:
+        jsonstream = sys.stdout
     
     x = 0
     for data in pdfparser_page(args.pdffile):
+        extracted = True
         if x < args.pages:
             stream.write("**[PAGE {:04d}]**\n".format(x))
             
@@ -78,16 +122,12 @@ if __name__ == '__main__':
             for remove, replace in ( ["(\w+)-\s+(\w)", None],
                             ["( ) +", None],
                             ["\s(\s)", None],
+                            ["—", "-"]
                             ):
                 data = strip_re(data, remove, replace)
             
-            if ADMINISTRATION_DATE_RANGE.search(data):
-                print ADMINISTRATION_DATE_RANGE.search(data).group(0)
-            if PRESIDENTIAL_ADMINISTRATION.search(data):
-                print PRESIDENTIAL_ADMINISTRATION.search(data).group(0)
-                print PRESIDENTIAL_ADMINISTRATION.search(data).group(2)
-            
-            
+            while data and extracted:
+                data, extracted = Process_Presidential_Administration(data)            
             
             stream.write(data)
             stream.write("-"*125 + "\n")
