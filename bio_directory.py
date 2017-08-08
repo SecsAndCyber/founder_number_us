@@ -52,9 +52,20 @@ cal  data""", "(\w+)-\s+(\w)")
         
 ADMINISTRATION_DATE_RANGE = re.compile(r"((JANUARY|MARCH|APRIL|MAY|JULY|AUGUST|SEPTEMBER|NOVEMBER) \d+, \d{4},\s+TO\s+(JANUARY|MARCH|APRIL|MAY|JULY|AUGUST|SEPTEMBER|NOVEMBER) \d+, \d{4})")
 PRESIDENTIAL_ADMINISTRATION = re.compile(r"^(First|Second|Third|Fourth)??\s*Administration of (\w+\s+(\w+\.?\s+)??(\w+\.?\s+)??\w+(, JR\.)??)$",re.M)
+CONTINENTAL_CONGRESS = re.compile(r"DELEGATES IN THE CONTINENTAL CONGRESS")
 
 Presidential_Administrations = []
 
+def Process_Continental_Congressional_Term(data):
+    extracted = False
+    if CONTINENTAL_CONGRESS.search(data):
+        continental_congress_dict = {}
+        extracted = True
+        data = data[CONTINENTAL_CONGRESS.search(data).end():]
+    
+    return data, extracted
+    
+    
 def Process_Presidential_Administration(data):
     extracted = False
     if PRESIDENTIAL_ADMINISTRATION.search(data):
@@ -122,12 +133,16 @@ if __name__ == '__main__':
             for remove, replace in ( ["(\w+)-\s+(\w)", None],
                             ["( ) +", None],
                             ["\s(\s)", None],
-                            ["—", "-"]
+                            ["—", "-"],
+                            ["\d+\nBiographical Directory\n", None]
                             ):
                 data = strip_re(data, remove, replace)
             
             while data and extracted:
-                data, extracted = Process_Presidential_Administration(data)            
+                data, extracted = Process_Presidential_Administration(data)
+
+            while data and extracted:
+                data, extracted = Process_Continental_Congressional_Term(data)                   
             
             stream.write(data)
             stream.write("-"*125 + "\n")
